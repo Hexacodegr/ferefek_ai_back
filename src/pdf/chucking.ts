@@ -1,7 +1,5 @@
 import { RecursiveCharacterTextSplitter } from '@langchain/textsplitters';
-import { OpenAIEmbeddings } from '@langchain/openai';
 import { Document } from '@langchain/core/documents';
-import { stripMarkdownForEmbedding } from './utils';
 import { Chunk } from '../types';
 import { EMBEDDING_MODEL } from '../openai';
 /**

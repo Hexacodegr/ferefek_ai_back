@@ -1,4 +1,5 @@
-import { ANSWER_MODEL } from '../openai';
+import openai from 'openai';
+import { GENERATIVE_MODEL } from '../openai';
 import { Chunk, JobListing } from '../types';
 
 /**
@@ -10,19 +11,23 @@ import { Chunk, JobListing } from '../types';
  */
 export async function extractJobListingsWithLLM(
   chunks: Chunk[],
-  sourceFile: string,
-  openai: OpenAIClient
+  sourceFile: string
 ): Promise<JobListing[]> {
   // Concatenate all chunk texts for context (or use batching for large files)
   const text = chunks.map((c) => c.text).join('\n\n');
   const prompt = `Extract all job listings from the following text. For each job, return a JSON object with the following fields: id, title, department, location, salary, description, requirements (as an array), deadline, raw_text, extracted_at (ISO string), source_file, page_numbers (array of numbers). Return an array of such objects.\n\nText:\n${text}`;
 
-  const response = await openai.completion({
-    prompt,
+  const response = await openai.chat.completions.create({
+    messages: [
+      {
+        role: 'user',
+        content: prompt,
+      },
+    ],
     max_tokens: 2048,
     temperature: 0.2,
     stop: null,
-    model: ANSWER_MODEL,
+    model: GENERATIVE_MODEL,
     // You may need to adjust model/params as needed
   });
 

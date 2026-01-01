@@ -1,5 +1,5 @@
 import postgres from 'postgres';
-import { JobListing } from '../types';
+import { EMBEDDING_MODEL, GENERATIVE_MODEL } from '../openai';
 
 export class PostgresService {
   private client;
@@ -22,63 +22,186 @@ export class PostgresService {
 
   async setupPostgress() {
     console.log('🔧 Setting up PostgreSQL schema...');
+    // Create chat history table
     await this.client`
-      CREATE TABLE IF NOT EXISTS job_listings (
-        id VARCHAR(255) PRIMARY KEY,
-        title TEXT NOT NULL,
-        department VARCHAR(255),
-        location VARCHAR(255),
-        salary VARCHAR(255),
-        description TEXT,
-        requirements JSONB,
-        deadline TIMESTAMP,
-        raw_text TEXT,
-        extracted_at TIMESTAMP DEFAULT NOW(),
-        source_file VARCHAR(500),
-        page_numbers INTEGER[],
-        created_at TIMESTAMP DEFAULT NOW(),
-        updated_at TIMESTAMP DEFAULT NOW()
+      CREATE TABLE IF NOT EXISTS chat_history (
+        id SERIAL PRIMARY KEY,
+        session_id VARCHAR(255),
+        role VARCHAR(10) NOT NULL CHECK (role IN ('user', 'agent')),
+        message TEXT NOT NULL,
+        emb_tokens INTEGER DEFAULT 0,
+        gen_tokens INTEGER DEFAULT 0,
+        emb_model VARCHAR(100),
+        gen_model VARCHAR(100),
+        answer_val VARCHAR(10) CHECK (answer_val IN ('good', 'bad') OR answer_val IS NULL),
+        relative_docs JSONB,
+        created_at TIMESTAMP DEFAULT NOW()
       )
     `;
-    await this.client`CREATE INDEX IF NOT EXISTS idx_department ON job_listings(department)`;
-    await this.client`CREATE INDEX IF NOT EXISTS idx_location ON job_listings(location)`;
-    await this.client`CREATE INDEX IF NOT EXISTS idx_deadline ON job_listings(deadline)`;
-    await this.client`CREATE INDEX IF NOT EXISTS idx_extracted_at ON job_listings(extracted_at)`;
+    await this.client`CREATE INDEX IF NOT EXISTS idx_session_id ON chat_history(session_id)`;
+    await this.client`CREATE INDEX IF NOT EXISTS idx_role ON chat_history(role)`;
+    await this.client`CREATE INDEX IF NOT EXISTS idx_created_at ON chat_history(created_at)`;
+
     console.log('✅ PostgreSQL schema ready');
   }
 
-  async storeInPostgres(jobs: JobListing[]) {
-    console.log(`💾 Storing ${jobs.length} jobs in PostgreSQL...`);
-    for (const job of jobs) {
+  async storeChatMessage({
+    sessionId,
+    role,
+    message,
+    embTokens,
+    genTokens,
+    embModel,
+    genModel,
+    answerVal,
+    relativeDocs,
+  }: {
+    sessionId?: string;
+    role: 'user' | 'agent';
+    message: string;
+    embTokens?: number;
+    genTokens?: number;
+    embModel?: string;
+    genModel?: string;
+    answerVal?: 'good' | 'bad' | null;
+    relativeDocs?: Array<{
+      name: string;
+      url: string;
+      score: number;
+      docHash: string;
+    }> | null;
+  }) {
+    try {
       await this.client`
-      INSERT INTO job_listings ${this.client(
-        job,
-        'id',
-        'title',
-        'department',
-        'location',
-        'salary',
-        'description',
-        'raw_text',
-        'extracted_at',
-        'source_file',
-        'page_numbers'
-      )}
-      ON CONFLICT (id) DO UPDATE SET
-        title = EXCLUDED.title,
-        department = EXCLUDED.department,
-        location = EXCLUDED.location,
-        salary = EXCLUDED.salary,
-        description = EXCLUDED.description,
-        raw_text = EXCLUDED.raw_text,
-        updated_at = NOW()
-    `;
+        INSERT INTO chat_history (
+          session_id,
+          role,
+          message,
+          emb_tokens,
+          gen_tokens,
+          emb_model,
+          gen_model,
+          answer_val,
+          relative_docs
+        ) VALUES (
+          ${sessionId || null},
+          ${role},
+          ${message},
+          ${embTokens || 0},
+          ${genTokens || 0},
+          ${embModel || null},
+          ${genModel || null},
+          ${answerVal || null},
+          ${relativeDocs ? JSON.stringify(relativeDocs) : null}
+        )
+      `;
+      console.log(`💾 ${role} message stored in PostgreSQL`);
+    } catch (error) {
+      console.error('❌ Error storing chat message:', error);
     }
-    console.log('✅ Stored in PostgreSQL');
   }
 
-  async disconnect() {
-    await this.client.end();
+  async storeChatConversation({
+    sessionId,
+    userMessage,
+    agentMessage,
+    embPromptTokens,
+    genPromptTokens,
+    genAnswerTokens,
+    embModel,
+    genModel,
+    relativeDocs,
+  }: {
+    sessionId?: string;
+    userMessage: string;
+    agentMessage: string;
+    embPromptTokens?: number;
+    genPromptTokens?: number;
+    genAnswerTokens?: number;
+    embModel?: string;
+    genModel?: string;
+    relativeDocs?: Array<{
+      name: string;
+      url: string;
+      score: number;
+      docHash: string;
+    }>;
+  }) {
+    try {
+      // Generate session ID if not provided
+      const finalSessionId =
+        sessionId || `${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+
+      // Store user message
+      await this.storeChatMessage({
+        sessionId: finalSessionId,
+        role: 'user',
+        message: userMessage,
+        embTokens: embPromptTokens || 0,
+        genTokens: genPromptTokens || 0,
+        embModel: embModel || EMBEDDING_MODEL,
+        genModel: embModel || EMBEDDING_MODEL,
+        relativeDocs: null,
+      });
+
+      // Store agent message
+      await this.storeChatMessage({
+        sessionId: finalSessionId,
+        role: 'agent',
+        message: agentMessage,
+        embTokens: 0,
+        genTokens: genAnswerTokens || 0,
+        embModel: genModel || GENERATIVE_MODEL,
+        genModel: genModel || GENERATIVE_MODEL,
+        relativeDocs,
+      });
+
+      console.log('💾 Complete conversation stored in PostgreSQL');
+      return finalSessionId;
+    } catch (error) {
+      console.error('❌ Error storing conversation:', error);
+      return sessionId;
+    }
+  }
+
+  async updateAnswerValidation(messageId: number, answerVal: 'good' | 'bad') {
+    try {
+      await this.client`
+        UPDATE chat_history 
+        SET answer_val = ${answerVal}
+        WHERE id = ${messageId} AND role = 'agent'
+      `;
+      console.log(`✅ Answer validation updated for message ${messageId}`);
+    } catch (error) {
+      console.error('❌ Error updating answer validation:', error);
+    }
+  }
+
+  async getChatHistory(sessionId?: string, limit: number = 50) {
+    try {
+      if (sessionId) {
+        return await this.client`
+          SELECT * FROM chat_history 
+          WHERE session_id = ${sessionId}
+          ORDER BY created_at DESC 
+          LIMIT ${limit}
+        `;
+      } else {
+        return await this.client`
+          SELECT * FROM chat_history 
+          ORDER BY created_at DESC 
+          LIMIT ${limit}
+        `;
+      }
+    } catch (error) {
+      console.error('❌ Error retrieving chat history:', error);
+      return [];
+    }
+  }
+
+  disconnect() {
+    this.client.end();
+    console.log('🔌 PostgreSQL connection closed');
   }
 }
 

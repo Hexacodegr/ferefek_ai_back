@@ -1,9 +1,9 @@
 import OpenAI from 'openai';
-import { sleep } from './utils';
+import { sleep } from './pdf/utils';
 
 export const MAX_TOKENS_PER_EMBEDDING = 8000; // As per OpenAI docs
 export const EMBEDDING_MODEL = 'text-embedding-3-large';
-export const ANSWER_MODEL = 'gpt-4.1';
+export const GENERATIVE_MODEL = 'gpt-4.1';
 
 export class OpenAIClient {
   private client: OpenAI;
@@ -48,7 +48,10 @@ export class OpenAIClient {
     }
   }
 
-  async generateAnswerFromResults(userQuery: string, searchResults: any[]): Promise<string> {
+  async generateAnswerFromResults(
+    userQuery: string,
+    searchResults: any[]
+  ): Promise<{ generatedAnswer: string; tokensUsed: number }> {
     await this.rateLimit();
 
     try {
@@ -73,7 +76,7 @@ export class OpenAIClient {
         .join('\n');
 
       const response = await this.client.chat.completions.create({
-        model: ANSWER_MODEL,
+        model: GENERATIVE_MODEL,
         messages: [
           {
             role: 'system',
@@ -102,7 +105,11 @@ Please provide a comprehensive answer based on the above context.`,
         temperature: 0.2,
       });
 
-      return response.choices[0].message.content?.trim() || 'Unable to generate response.';
+      return {
+        generatedAnswer:
+          response.choices[0].message.content?.trim() || 'Unable to generate response.',
+        tokensUsed: response.usage?.total_tokens || 0,
+      };
     } catch (error: any) {
       if (error.status === 429) {
         console.warn('🔄 Rate limited. Waiting...');
@@ -110,7 +117,10 @@ Please provide a comprehensive answer based on the above context.`,
         return this.generateAnswerFromResults(userQuery, searchResults);
       }
       console.warn('Answer generation failed:', error.message);
-      return 'Sorry, I encountered an error while generating the response.';
+      return {
+        generatedAnswer: 'Sorry, I encountered an error while generating the response.',
+        tokensUsed: 0,
+      };
     }
   }
 
@@ -121,7 +131,7 @@ Please provide a comprehensive answer based on the above context.`,
 
     try {
       const response = await this.client.chat.completions.create({
-        model: ANSWER_MODEL,
+        model: GENERATIVE_MODEL,
         messages: [
           {
             role: 'system',

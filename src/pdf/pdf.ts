@@ -1,7 +1,5 @@
 import { PDFLoader } from '@langchain/community/document_loaders/fs/pdf';
 import { enhanceToMarkdown, ensureConsistency } from './utils';
-import { createHash } from 'crypto';
-import { readFileSync } from 'fs';
 
 /**
  * Converts a PDF file to Markdown and returns both the entire Markdown and an array of per-page Markdown.
