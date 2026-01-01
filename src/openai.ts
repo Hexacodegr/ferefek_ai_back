@@ -1,6 +1,6 @@
 import OpenAI from 'openai';
-import { sleep } from './pdf/utils';
 import { ChatHistoryRow } from './types';
+import { sleep } from './utils';
 
 export const MAX_TOKENS_PER_EMBEDDING = 8000; // As per OpenAI docs
 export const EMBEDDING_MODEL = 'text-embedding-3-large';
@@ -72,7 +72,18 @@ Instructions:
 5. Be concise but thorough in your response
 6. If multiple documents contain relevant information, synthesize the information
 7. Maintain the same language as the user's question
-8. If no relevant information is found, politely state that the documents don't contain information about the query`,
+8. If no relevant information is found, politely state that the documents don't contain information about the query
+9. Use markedown formatting for lists, code snippets, and emphasis
+
+The actualy retreived document excerpts are below: 
+${searchResults
+  .map(
+    (res, idx) =>
+      `\n[Document ${idx + 1} | Score: ${res.score?.toFixed(
+        4
+      )}]\n${res.payload?.text || 'No content available.'}`
+  )
+  .join('\n')}`,
           },
           {
             role: 'user',
@@ -117,18 +128,15 @@ Please provide a comprehensive answer based on the above context.`,
         messages: [
           {
             role: 'system',
-            content: `You are a query optimizer for document search. Clean and expand user queries to improve semantic search results.
+            content: `You are a user query optimizer for RAG. Clean and correct user queries to improve semantic search results.
 
 Rules:
-1. Fix typos and grammar
-2. Expand abbreviations 
-3. Add related keywords/synonyms
-4. Keep queries concise
-5. Remove conversational fluff
-6. Return only the optimized query text
-7. Do not add any explanations or additional text
-8. Maintain the original intent of the query
-9. Answer in the same language as the original query`,
+1. Fix typos and grammar4. Keep queries concise
+2. Remove conversational fluff
+3. Return only the optimized query text
+4. Do not add any explanations or additional text
+5. Maintain the original intent of the query
+6. Answer in the same language as the original query`,
           },
           {
             role: 'user',

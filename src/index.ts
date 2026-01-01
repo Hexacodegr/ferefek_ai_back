@@ -5,7 +5,7 @@ import { postgresService } from './db/postgress';
 import { ChatHistoryRow } from './types';
 
 const app = new Hono();
-const scoreThreshold = 0.65;
+const scoreThreshold = 0.4;
 
 // Chat endpoint for similarity search
 app.post('/chat', async (c) => {

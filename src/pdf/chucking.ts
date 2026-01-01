@@ -1,6 +1,5 @@
 import { RecursiveCharacterTextSplitter } from '@langchain/textsplitters';
 import { Document } from '@langchain/core/documents';
-import { Chunk } from '../types';
 import { EMBEDDING_MODEL } from '../openai';
 /**
  * Create 3 levels of chunk embeddings: whole PDF, per page, and per paragraph.
@@ -25,6 +24,7 @@ export function createMultiLevelChunks(
   const documents: Document[] = [];
 
   // 1. Whole PDF
+  const documentChunkId = `${documentHash}`;
   const fullDocument = new Document({
     pageContent: fullMarkdown,
     metadata: {
@@ -34,7 +34,7 @@ export function createMultiLevelChunks(
       documentHash,
       chunkLevel: 'document',
       pageRange: [1, pagesMarkdown.length],
-      chunkId: `${documentHash}`,
+      chunkId: documentChunkId,
       parentIds: [], // Root document has no parents
       embeddingModel: EMBEDDING_MODEL,
     },
@@ -43,6 +43,7 @@ export function createMultiLevelChunks(
 
   // 2. Per page
   pagesMarkdown.forEach((page, i) => {
+    const pageChunkId = `${documentHash}-${i + 1}`;
     const pageDocument = new Document({
       pageContent: page,
       metadata: {
@@ -52,8 +53,8 @@ export function createMultiLevelChunks(
         documentHash,
         chunkLevel: 'page',
         pageNumber: i + 1,
-        chunkId: `${documentHash}-${i + 1}`,
-        parentIds: [0], // References the full document (index 0)
+        chunkId: pageChunkId,
+        parentIds: [documentChunkId], // References the actual document chunk ID
         embeddingModel: EMBEDDING_MODEL,
       },
     });
@@ -62,10 +63,9 @@ export function createMultiLevelChunks(
 
   // 3. Per paragraph
   if (paragraphChucking) {
-    let paraIndex = 0;
     const MIN_PARAGRAPH_LENGTH = 100; // Adjust as needed
 
-    pagesMarkdown.forEach((page, i) => {
+    pagesMarkdown.forEach((page, pgi) => {
       const rawParagraphs = page
         .split(/\n\n+/)
         .map((p) => p.trim())
@@ -110,7 +110,10 @@ export function createMultiLevelChunks(
       }
       if (buffer) mergedParagraphs.push(buffer);
 
-      mergedParagraphs.forEach((para) => {
+      mergedParagraphs.forEach((para, pri) => {
+        const pageChunkId = `${documentHash}-${pgi + 1}`;
+        const paragraphChunkId = `${pageChunkId}-${pri + 1}`;
+
         documents.push(
           new Document({
             pageContent: para,
@@ -120,10 +123,10 @@ export function createMultiLevelChunks(
               fileFormat,
               documentHash,
               chunkLevel: 'paragraph',
-              pageNumber: i + 1,
-              paragraphIndex: paraIndex++,
-              chunkId: `${documentHash}-${i + 1}-${paraIndex}`,
-              parentIds: [i + 1], // References the page document
+              pageNumber: pgi + 1,
+              paragraphIndex: pri + 1,
+              chunkId: paragraphChunkId,
+              parentIds: [pageChunkId], // References the actual page chunk ID
               embeddingModel: EMBEDDING_MODEL,
             },
           })
@@ -191,34 +194,34 @@ export async function processMarkdownForEmbeddings(markdown: string) {
   return enrichedDocs;
 }
 
-/**
- * Split PDF pages into chunks, skipping the last page before chunking.
- * @param pages Array of page strings (from PDF)
- */
-export function splitTextIntoChunksFromPages(pages: string[]) {
-  const splitter = new RecursiveCharacterTextSplitter({
-    chunkSize: 1000,
-    chunkOverlap: 200,
-  });
-  let chunkIndex = 0;
-  const chunks: Chunk[] = [];
-  // Skip the last page
-  for (let i = 0; i < pages.length - 1; i++) {
-    const page = pages[i];
-    const docs = splitter.splitText(page);
-    for (const chunk of docs) {
-      chunks.push({
-        text: chunk,
-        metadata: {
-          pageNum: i + 1,
-          chunkIndex: chunkIndex++,
-          type: 'paragraph',
-        },
-      });
-    }
-  }
-  return chunks;
-}
+// /**
+//  * Split PDF pages into chunks, skipping the last page before chunking.
+//  * @param pages Array of page strings (from PDF)
+//  */
+// export function splitTextIntoChunksFromPages(pages: string[]) {
+//   const splitter = new RecursiveCharacterTextSplitter({
+//     chunkSize: 1000,
+//     chunkOverlap: 200,
+//   });
+//   let chunkIndex = 0;
+//   const chunks: Chunk[] = [];
+//   // Skip the last page
+//   for (let i = 0; i < pages.length - 1; i++) {
+//     const page = pages[i];
+//     const docs = splitter.splitText(page);
+//     for (const chunk of docs) {
+//       chunks.push({
+//         text: chunk,
+//         metadata: {
+//           pageNum: i + 1,
+//           chunkIndex: chunkIndex++,
+//           type: 'paragraph',
+//         },
+//       });
+//     }
+//   }
+//   return chunks;
+// }
 
 // /**
 //  * Creates hybrid Document objects for embedding: both markdown and plain text (with stripped markdown elements as metadata).

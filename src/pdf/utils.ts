@@ -319,7 +319,3 @@ export function getDocumentHashId(filePath: string): string {
   const docHashId = createHash('md5').update(readFileSync(filePath)).digest('hex');
   return docHashId;
 }
-
-export function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}

@@ -1,6 +1,7 @@
 import { QdrantClient } from '@qdrant/js-client-rest';
+import { generateUniqueId } from '../utils';
 
-export const COLLECTION_NAME = 'job_listings';
+export const COLLECTION_NAME = 'fek_embeddings';
 export const EMBEDDING_DIM = 3072;
 
 export class QdrantService {
@@ -14,24 +15,6 @@ export class QdrantService {
     this.collectionName = options?.collectionName || COLLECTION_NAME;
     this.embeddingDim = options?.embeddingDim || EMBEDDING_DIM;
     this.client = new QdrantClient({ url, apiKey });
-  }
-
-  private generateUniqueId(chunkId: string): string {
-    // Convert chunkId to a UUID v5 format using a deterministic hash
-    // This ensures we get a valid UUID that Qdrant accepts
-    const crypto = require('crypto');
-    const hash = crypto.createHash('md5').update(chunkId).digest('hex');
-
-    // Format as UUID v4 (8-4-4-4-12)
-    const uuid = [
-      hash.substring(0, 8),
-      hash.substring(8, 12),
-      hash.substring(12, 16),
-      hash.substring(16, 20),
-      hash.substring(20, 32),
-    ].join('-');
-
-    return uuid;
   }
 
   async setupQdrant() {
@@ -89,7 +72,7 @@ export class QdrantService {
       }
 
       // Generate deterministic unique ID based on chunk ID
-      const uniqueId = this.generateUniqueId(chunk.metadata.chunkId);
+      const uniqueId = generateUniqueId(chunk.metadata.chunkId);
 
       return {
         id: uniqueId,
@@ -225,22 +208,6 @@ export class QdrantService {
       throw error;
     }
   }
-
-  // async storeChunkWithEmbedding(pageContent: string, metadata: any, embedding: number[]) {
-  //   console.log(`💾 Storing single chunk in Qdrant...`);
-
-  //   const point = {
-  //     id: metadata.chunkId || Math.random().toString(36).substr(2, 9), // Generate ID if not exists
-  //     vector: embedding,
-  //     payload: {
-  //       text: pageContent,
-  //       metadata: metadata,
-  //     },
-  //   };
-
-  //   await this.client.upsert(this.collectionName, { points: [point] });
-  //   console.log('✅ Single chunk stored in Qdrant');
-  // }
 }
 
 export const qdrantService = new QdrantService();
