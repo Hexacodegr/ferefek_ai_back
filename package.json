@@ -1,0 +1,30 @@
+{
+  "name": "ferefek-ai",
+  "version": "1.0.0",
+  "main": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "dev": "bun run src/index.ts"
+  },
+  "dependencies": {
+    "@langchain/community": "^1.1.1",
+    "@langchain/core": "^1.1.8",
+    "@langchain/textsplitters": "^1.0.1",
+    "@qdrant/js-client-rest": "^1.8.0",
+    "langchain": "^1.2.3",
+    "openai": "^6.15.0",
+    "pdf-parse": "^1.1.4",
+    "postgres": "^3.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.30",
+    "@types/pdf-parse": "^1.1.5",
+    "@typescript-eslint/eslint-plugin": "^6.20.0",
+    "@typescript-eslint/parser": "^6.20.0",
+    "eslint": "^8.56.0",
+    "eslint-plugin-prettier": "^5.0.1",
+    "prettier": "^3.2.5",
+    "typescript": "^5.3.3"
+  }
+}

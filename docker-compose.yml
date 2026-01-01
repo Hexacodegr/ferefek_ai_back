@@ -1,0 +1,54 @@
+version: '3.8'
+name: ferefek-ai
+services:
+  # ferefek-ai-dev:
+  #   build: .
+  #   environment:
+  #     - POSTGRES_HOST=ferefek-ai-postgres
+  #     - POSTGRES_PORT=5432
+  #     - POSTGRES_DB=jobs_db
+  #     - POSTGRES_USER=postgres
+  #     - POSTGRES_PASSWORD=password
+  #     - QDRANT_URL=http://ferefek-ai-qdrant:6333
+  #     - QDRANT_API_KEY=
+  #     - OPENAI_API_KEY=${OPENAI_API_KEY} # This will use your .env file
+
+  #   depends_on:
+  #     - ferefek-ai-postgres
+  #     - ferefek-ai-qdrant
+  #   ports:
+  #     - '3000:3000'
+  #   volumes:
+  #     - ./src:/app/src
+  #   command: bun run --watch src/index.ts
+
+  ferefek-ai-postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: jobs_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    ports:
+      - '5432:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  ferefek-ai-qdrant:
+    image: qdrant/qdrant:latest
+    ports:
+      - '6333:6333'
+    volumes:
+      - qdrantdata:/qdrant/storage
+
+  ferefek-ai-qdrant-swagger:
+    image: swaggerapi/swagger-ui
+    ports:
+      - '8080:8080'
+    environment:
+      - SWAGGER_JSON_URL=http://localhost:6333/openapi.json
+    depends_on:
+      - ferefek-ai-qdrant
+
+volumes:
+  pgdata:
+  qdrantdata:
