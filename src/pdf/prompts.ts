@@ -1,3 +1,4 @@
+import { ANSWER_MODEL } from '../openai';
 import { Chunk, JobListing } from '../types';
 
 /**
@@ -21,7 +22,7 @@ export async function extractJobListingsWithLLM(
     max_tokens: 2048,
     temperature: 0.2,
     stop: null,
-    model: 'gpt-3.5-turbo',
+    model: ANSWER_MODEL,
     // You may need to adjust model/params as needed
   });
 

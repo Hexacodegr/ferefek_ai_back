@@ -1,26 +1,26 @@
 version: '3.8'
 name: ferefek-ai
 services:
-  # ferefek-ai-dev:
-  #   build: .
-  #   environment:
-  #     - POSTGRES_HOST=ferefek-ai-postgres
-  #     - POSTGRES_PORT=5432
-  #     - POSTGRES_DB=jobs_db
-  #     - POSTGRES_USER=postgres
-  #     - POSTGRES_PASSWORD=password
-  #     - QDRANT_URL=http://ferefek-ai-qdrant:6333
-  #     - QDRANT_API_KEY=
-  #     - OPENAI_API_KEY=${OPENAI_API_KEY} # This will use your .env file
+  ferefek-ai-dev:
+    build: .
+    environment:
+      - POSTGRES_HOST=ferefek-ai-postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=jobs_db
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password
+      - QDRANT_URL=http://ferefek-ai-qdrant:6333
+      - QDRANT_API_KEY=
+      - OPENAI_API_KEY=${OPENAI_API_KEY} # This will use your .env file
 
-  #   depends_on:
-  #     - ferefek-ai-postgres
-  #     - ferefek-ai-qdrant
-  #   ports:
-  #     - '3000:3000'
-  #   volumes:
-  #     - ./src:/app/src
-  #   command: bun run --watch src/index.ts
+    depends_on:
+      - ferefek-ai-postgres
+      - ferefek-ai-qdrant
+    ports:
+      - '3000:3000'
+    volumes:
+      - ./src:/app/src
+    command: bun run --watch src/index.ts
 
   ferefek-ai-postgres:
     image: postgres:15-alpine

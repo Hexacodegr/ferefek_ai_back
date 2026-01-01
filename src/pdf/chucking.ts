@@ -3,6 +3,7 @@ import { OpenAIEmbeddings } from '@langchain/openai';
 import { Document } from '@langchain/core/documents';
 import { stripMarkdownForEmbedding } from './utils';
 import { Chunk } from '../types';
+import { EMBEDDING_MODEL } from '../openai';
 /**
  * Create 3 levels of chunk embeddings: whole PDF, per page, and per paragraph.
  * @param fullMarkdown The full markdown string of the PDF
@@ -10,6 +11,7 @@ import { Chunk } from '../types';
  * @param fileName filename of the file
  * @param filePath path of the file
  * @param fileFormat format of the file
+ * @param documentHash unique hash of the document
  * @param paragraphChucking whether to create paragraph level chunks
  * @returns Array of Document objects for each level
  */
@@ -19,10 +21,10 @@ export function createMultiLevelChunks(
   fileName: string,
   filePath: string,
   fileFormat: string,
-  paragraphChucking: boolean
+  documentHash: string,
+  paragraphChucking: boolean = true
 ): Document[] {
   const documents: Document[] = [];
-  let docId = 0;
 
   // 1. Whole PDF
   const fullDocument = new Document({
@@ -31,10 +33,12 @@ export function createMultiLevelChunks(
       fileName,
       filePath,
       fileFormat,
+      documentHash,
       chunkLevel: 'document',
       pageRange: [1, pagesMarkdown.length],
-      chunkId: docId++,
+      chunkId: `${documentHash}`,
       parentIds: [], // Root document has no parents
+      embeddingModel: EMBEDDING_MODEL,
     },
   });
   documents.push(fullDocument);
@@ -47,16 +51,18 @@ export function createMultiLevelChunks(
         fileName,
         filePath,
         fileFormat,
+        documentHash,
         chunkLevel: 'page',
         pageNumber: i + 1,
-        chunkId: docId++,
+        chunkId: `${documentHash}-${i + 1}`,
         parentIds: [0], // References the full document (index 0)
+        embeddingModel: EMBEDDING_MODEL,
       },
     });
     documents.push(pageDocument);
   });
 
-  //! 3. Per paragraph
+  // 3. Per paragraph
   if (paragraphChucking) {
     let paraIndex = 0;
     const MIN_PARAGRAPH_LENGTH = 100; // Adjust as needed
@@ -114,9 +120,13 @@ export function createMultiLevelChunks(
               fileName,
               filePath,
               fileFormat,
+              documentHash,
               chunkLevel: 'paragraph',
               pageNumber: i + 1,
               paragraphIndex: paraIndex++,
+              chunkId: `${documentHash}-${i + 1}-${paraIndex}`,
+              parentIds: [i + 1], // References the page document
+              embeddingModel: EMBEDDING_MODEL,
             },
           })
         );
@@ -183,69 +193,6 @@ export async function processMarkdownForEmbeddings(markdown: string) {
   return enrichedDocs;
 }
 
-// 3. Generate embeddings
-/**
- * Generates OpenAI embeddings for an array of Document objects.
- *
- * - Uses the OpenAIEmbeddings class with the 'text-embedding-3-large' model
- * - Embeds the pageContent of each Document
- * - Returns the resulting embedding vectors
- *
- * @param docs Array of Document objects to embed
- * @returns Array of embedding vectors (one per document)
- */
-export async function generateEmbeddings(docs: Document[]) {
-  const embeddings = new OpenAIEmbeddings({
-    modelName: 'text-embedding-3-large', // Best quality
-  });
-
-  console.log(`🔄 Generating embeddings for ${docs.length} chunks...`);
-
-  const vectors = await embeddings.embedDocuments(docs.map((d) => d.pageContent));
-
-  console.log(`✅ Generated ${vectors.length} embeddings`);
-
-  return vectors;
-}
-
-/**
- * Creates hybrid Document objects for embedding: both markdown and plain text (with stripped markdown elements as metadata).
- *
- * - Splits markdown into semantic chunks using RecursiveCharacterTextSplitter
- * - For each chunk, strips markdown for embedding and attaches original markdown and removed elements as metadata
- *
- * Useful for pipelines that want to embed plain text but retain markdown structure for display or analysis.
- *
- * @param markdown The markdown string to process
- * @returns Array of Document objects with both plain and markdown content/metadata
- */
-export async function createHybridDocuments(markdown: string) {
-  const splitter = new RecursiveCharacterTextSplitter({
-    chunkSize: 1000,
-    chunkOverlap: 200,
-    separators: ['\n## ', '\n### ', '\n#### ', '\n\n', '\n', '. ', ' '],
-  });
-
-  const chunks = await splitter.createDocuments([markdown]);
-
-  console.log(`📦 Chunks ${chunks} `);
-
-  return chunks.map((chunk, i) => {
-    const markdownContent = chunk.pageContent;
-    const plainContent = stripMarkdownForEmbedding(markdownContent);
-
-    return new Document({
-      pageContent: plainContent.text, // For embedding
-      metadata: {
-        ...chunk.metadata,
-        chunkId: i,
-        markdownContent: markdownContent, // For display
-        strippedMetadata: plainContent.metadata, // Metadata about removed markdown elements
-      },
-    });
-  });
-}
-
 /**
  * Split PDF pages into chunks, skipping the last page before chunking.
  * @param pages Array of page strings (from PDF)
@@ -274,3 +221,41 @@ export function splitTextIntoChunksFromPages(pages: string[]) {
   }
   return chunks;
 }
+
+// /**
+//  * Creates hybrid Document objects for embedding: both markdown and plain text (with stripped markdown elements as metadata).
+//  *
+//  * - Splits markdown into semantic chunks using RecursiveCharacterTextSplitter
+//  * - For each chunk, strips markdown for embedding and attaches original markdown and removed elements as metadata
+//  *
+//  * Useful for pipelines that want to embed plain text but retain markdown structure for display or analysis.
+//  *
+//  * @param markdown The markdown string to process
+//  * @returns Array of Document objects with both plain and markdown content/metadata
+//  */
+// export async function createHybridDocuments(markdown: string) {
+//   const splitter = new RecursiveCharacterTextSplitter({
+//     chunkSize: 1000,
+//     chunkOverlap: 200,
+//     separators: ['\n## ', '\n### ', '\n#### ', '\n\n', '\n', '. ', ' '],
+//   });
+
+//   const chunks = await splitter.createDocuments([markdown]);
+
+//   console.log(`📦 Chunks ${chunks} `);
+
+//   return chunks.map((chunk, i) => {
+//     const markdownContent = chunk.pageContent;
+//     const plainContent = stripMarkdownForEmbedding(markdownContent);
+
+//     return new Document({
+//       pageContent: plainContent.text, // For embedding
+//       metadata: {
+//         ...chunk.metadata,
+//         chunkId: i,
+//         markdownContent: markdownContent, // For display
+//         strippedMetadata: plainContent.metadata, // Metadata about removed markdown elements
+//       },
+//     });
+//   });
+// }
