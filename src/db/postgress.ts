@@ -1,5 +1,6 @@
 import postgres from 'postgres';
 import { EMBEDDING_MODEL, GENERATIVE_MODEL } from '../openai';
+import { ChatHistoryRow } from '../types';
 
 export class PostgresService {
   private client;
@@ -27,8 +28,8 @@ export class PostgresService {
       CREATE TABLE IF NOT EXISTS chat_history (
         id SERIAL PRIMARY KEY,
         session_id VARCHAR(255),
-        role VARCHAR(10) NOT NULL CHECK (role IN ('user', 'agent')),
-        message TEXT NOT NULL,
+        role VARCHAR(10) NOT NULL CHECK (role IN ('user', 'assistant')),
+        content TEXT NOT NULL,
         emb_tokens INTEGER DEFAULT 0,
         gen_tokens INTEGER DEFAULT 0,
         emb_model VARCHAR(100),
@@ -48,7 +49,7 @@ export class PostgresService {
   async storeChatMessage({
     sessionId,
     role,
-    message,
+    content,
     embTokens,
     genTokens,
     embModel,
@@ -57,8 +58,8 @@ export class PostgresService {
     relativeDocs,
   }: {
     sessionId?: string;
-    role: 'user' | 'agent';
-    message: string;
+    role: 'user' | 'assistant';
+    content: string;
     embTokens?: number;
     genTokens?: number;
     embModel?: string;
@@ -76,7 +77,7 @@ export class PostgresService {
         INSERT INTO chat_history (
           session_id,
           role,
-          message,
+          content,
           emb_tokens,
           gen_tokens,
           emb_model,
@@ -86,7 +87,7 @@ export class PostgresService {
         ) VALUES (
           ${sessionId || null},
           ${role},
-          ${message},
+          ${content},
           ${embTokens || 0},
           ${genTokens || 0},
           ${embModel || null},
@@ -136,7 +137,7 @@ export class PostgresService {
       await this.storeChatMessage({
         sessionId: finalSessionId,
         role: 'user',
-        message: userMessage,
+        content: userMessage,
         embTokens: embPromptTokens || 0,
         genTokens: genPromptTokens || 0,
         embModel: embModel || EMBEDDING_MODEL,
@@ -147,8 +148,8 @@ export class PostgresService {
       // Store agent message
       await this.storeChatMessage({
         sessionId: finalSessionId,
-        role: 'agent',
-        message: agentMessage,
+        role: 'assistant',
+        content: agentMessage,
         embTokens: 0,
         genTokens: genAnswerTokens || 0,
         embModel: genModel || GENERATIVE_MODEL,
@@ -169,7 +170,7 @@ export class PostgresService {
       await this.client`
         UPDATE chat_history 
         SET answer_val = ${answerVal}
-        WHERE id = ${messageId} AND role = 'agent'
+        WHERE id = ${messageId} AND role = 'assistant'
       `;
       console.log(`✅ Answer validation updated for message ${messageId}`);
     } catch (error) {
@@ -180,22 +181,18 @@ export class PostgresService {
   async getChatHistory(sessionId?: string, limit: number = 50) {
     try {
       if (sessionId) {
-        return await this.client`
+        return await this.client<ChatHistoryRow[]>`
           SELECT * FROM chat_history 
           WHERE session_id = ${sessionId}
           ORDER BY created_at DESC 
           LIMIT ${limit}
         `;
       } else {
-        return await this.client`
-          SELECT * FROM chat_history 
-          ORDER BY created_at DESC 
-          LIMIT ${limit}
-        `;
+        return [] as ChatHistoryRow[];
       }
     } catch (error) {
       console.error('❌ Error retrieving chat history:', error);
-      return [];
+      return [] as ChatHistoryRow[];
     }
   }
 

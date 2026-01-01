@@ -1,5 +1,6 @@
 import OpenAI from 'openai';
 import { sleep } from './pdf/utils';
+import { ChatHistoryRow } from './types';
 
 export const MAX_TOKENS_PER_EMBEDDING = 8000; // As per OpenAI docs
 export const EMBEDDING_MODEL = 'text-embedding-3-large';
@@ -50,59 +51,39 @@ export class OpenAIClient {
 
   async generateAnswerFromResults(
     userQuery: string,
-    searchResults: any[]
+    searchResults: any[],
+    chatHistory: ChatHistoryRow[] = []
   ): Promise<{ generatedAnswer: string; tokensUsed: number }> {
     await this.rateLimit();
 
     try {
-      // Prepare context from search results
-      const context = searchResults
-        .map((result, index) => {
-          const payload = result.payload;
-          return (
-            `Document ${index + 1} (Score: ${result.score?.toFixed(3) || 'N/A'}):
-` +
-            `File: ${payload.documentName || 'Unknown'}
-` +
-            `Page: ${payload.pageNumber || 'N/A'}
-` +
-            `Type: ${payload.chunkLevel || 'Unknown'}
-` +
-            `Content: ${payload.text || 'No content'}
-` +
-            `---\n`
-          );
-        })
-        .join('\n');
-
       const response = await this.client.chat.completions.create({
         model: GENERATIVE_MODEL,
         messages: [
           {
             role: 'system',
-            content: `You are a helpful AI assistant that answers questions based on provided document excerpts. 
+            content: `You are a helpful AI assistant that answers questions based on provided document excerpts and conversation history. 
 
 Instructions:
-1. Answer the user's question using ONLY the information provided in the context
+1. Answer the user's question using ONLY the information provided in the context and previous conversation
 2. If the context doesn't contain enough information, clearly state this
 3. Cite specific documents when referencing information (e.g., "According to Document 1...")
-4. Be concise but thorough in your response
-5. If multiple documents contain relevant information, synthesize the information
-6. Maintain the same language as the user's question
-7. If no relevant information is found, politely state that the documents don't contain information about the query`,
+4. Use conversation history to provide contextual and coherent responses
+5. Be concise but thorough in your response
+6. If multiple documents contain relevant information, synthesize the information
+7. Maintain the same language as the user's question
+8. If no relevant information is found, politely state that the documents don't contain information about the query`,
           },
           {
             role: 'user',
             content: `Question: ${userQuery}
 
-Context from search results:
-${context}
-
 Please provide a comprehensive answer based on the above context.`,
           },
+          ...chatHistory,
         ],
-        max_tokens: 1500,
-        temperature: 0.2,
+        max_tokens: 4000,
+        temperature: 0.1,
       });
 
       return {
@@ -125,7 +106,8 @@ Please provide a comprehensive answer based on the above context.`,
   }
 
   async generateCleanUserPrompt(
-    query: string
+    query: string,
+    chatHistory: ChatHistoryRow[] = []
   ): Promise<{ generatedUserPrompt: string; tokensUsed: number }> {
     await this.rateLimit();
 
@@ -152,6 +134,7 @@ Rules:
             role: 'user',
             content: query,
           },
+          ...chatHistory,
         ],
         max_tokens: 100,
         temperature: 0.1,

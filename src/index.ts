@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { GENERATIVE_MODEL, EMBEDDING_MODEL, openAIClient } from './openai';
 import { qdrantService } from './db/qdrant';
 import { postgresService } from './db/postgress';
+import { ChatHistoryRow } from './types';
 
 const app = new Hono();
 const scoreThreshold = 0.65;
@@ -14,15 +15,21 @@ app.post('/chat', async (c) => {
       return c.json({ error: 'Missing prompt' }, 400);
     }
 
+    // 1. Get conversation history if sessionId is provided
+    let chatHistory: ChatHistoryRow[] = [];
+    if (sessionId) {
+      chatHistory = await postgresService.getChatHistory(sessionId, 20); // Get last 20 messages
+    }
+
     // Optional: Clean/expand query with LLM for better retrieval
-    const cleanedPrompt = await openAIClient.generateCleanUserPrompt(prompt);
+    const cleanedPrompt = await openAIClient.generateCleanUserPrompt(prompt, chatHistory);
     console.log('Original query:', prompt);
 
-    // 1. Embed the (cleaned) prompt
+    // 2. Embed the (cleaned) prompt
     const promptEmbedding = await openAIClient.createEmbedding(cleanedPrompt.generatedUserPrompt);
     const promptVector = promptEmbedding.embedding;
 
-    // 2. Similarity search in Qdrant with optional filter
+    // 3. Similarity search in Qdrant with optional filter
     const results = await qdrantService.similaritySearch(
       promptVector,
       limit || 10,
@@ -32,10 +39,10 @@ app.post('/chat', async (c) => {
 
     console.log('Similarity search results:', results);
 
-    // 3. Generate answer based on search results
-    const answer = await openAIClient.generateAnswerFromResults(prompt, results);
+    // 4. Generate answer based on search results and chat history
+    const answer = await openAIClient.generateAnswerFromResults(prompt, results, chatHistory);
 
-    // 4. Prepare relative documents data
+    // 5. Prepare relative documents data
     const relativeDocs = results.map((result) => ({
       name: result.payload?.documentName || 'Unknown Document',
       url: result.payload?.documentFilePath || '',
@@ -46,7 +53,7 @@ app.post('/chat', async (c) => {
     const totalGenTokens = cleanedPrompt.tokensUsed + answer.tokensUsed;
     const totalEmbTokens = promptEmbedding.tokensUsed;
 
-    // 5. Store conversation history in PostgreSQL
+    // 6. Store conversation history in PostgreSQL
     const finalSessionId = await postgresService.storeChatConversation({
       sessionId,
       userMessage: prompt,
