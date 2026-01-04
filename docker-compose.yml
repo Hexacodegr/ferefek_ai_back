@@ -46,15 +46,6 @@ services:
     networks:
       - ferefek-network
 
-  ferefek-ai-qdrant-swagger:
-    image: swaggerapi/swagger-ui
-    environment:
-      - SWAGGER_URL=${SWAGGER_URL:-http://ferefek-ai-qdrant-swagger:8080}/swagger.json
-    depends_on:
-      - ferefek-ai-qdrant
-    networks:
-      - ferefek-network
-
 networks:
   ferefek-network:
     driver: bridge
