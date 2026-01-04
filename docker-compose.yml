@@ -19,7 +19,7 @@ services:
     ports:
       - '3000:3000'
     networks:
-      - dokploy-network
+      - ferefek-network
     volumes:
       - ./src:/app/src
     command: bun run --watch src/index.ts
@@ -33,7 +33,7 @@ services:
     ports:
       - '5432:5432'
     networks:
-      - dokploy-network
+      - ferefek-network
     volumes:
       - pgdata:/var/lib/postgresql/data
 
@@ -44,7 +44,7 @@ services:
     volumes:
       - qdrantdata:/qdrant/storage
     networks:
-      - dokploy-network
+      - ferefek-network
 
   ferefek-ai-qdrant-swagger:
     image: swaggerapi/swagger-ui
@@ -55,7 +55,11 @@ services:
     depends_on:
       - ferefek-ai-qdrant
     networks:
-      - dokploy-network
+      - ferefek-network
+
+networks:
+  ferefek-network:
+    driver: bridge
 
 volumes:
   pgdata:
