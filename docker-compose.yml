@@ -9,7 +9,7 @@ services:
       - POSTGRES_DB=ferefek_ai_db
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=password
-      - QDRANT_URL=http://ferefek-ai-qdrant:6333
+      - QDRANT_URL=${QDRANT_URL:-http://ferefek-ai-qdrant:6333}
       - QDRANT_API_KEY=
       - OPENAI_API_KEY=${OPENAI_API_KEY} # This will use your .env file
 
@@ -49,7 +49,7 @@ services:
   ferefek-ai-qdrant-swagger:
     image: swaggerapi/swagger-ui
     environment:
-      - SWAGGER_JSON_URL=http://localhost:6333/openapi.json
+      - SWAGGER_URL=${SWAGGER_URL:-http://ferefek-ai-qdrant-swagger:8080}/swagger.json
     depends_on:
       - ferefek-ai-qdrant
     networks:
